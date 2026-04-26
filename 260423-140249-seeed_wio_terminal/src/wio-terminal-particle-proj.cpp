@@ -1,5 +1,7 @@
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -7,6 +9,8 @@
 #include <Seeed_HM330X.h>
 #include <rpcWiFi.h>
 #include <PubSubClient.h>
+
+using namespace std;
 
 // Serial-Monitor für Debug
 #define DEBUG_OUTPUT Serial
@@ -31,9 +35,23 @@ const char* str[] = {"PM1.0 conc(CF=1,SPM): ",
                     };
 
 void init_mqtt_client() {
+    wifiClient.setTimeout(5000);
     client.setClient(wifiClient);
     client.setServer("185.45.204.21", 1883);
-    client.connect(clientID);
+    client.setSocketTimeout(10);
+    int attempts = 0;
+    while(!client.connected()) {
+        DEBUG_OUTPUT.print("Attempting connection to MQTT Broker...");
+        tft.drawString("Attempting MQTT Broker connect...", 10, 50);
+        if(client.connect(clientID)) {
+            tft.drawString("Sucessfully connected to broker!", 10, 65);
+        } else {
+            DEBUG_OUTPUT.print("Attempts: ");
+            DEBUG_OUTPUT.println(attempts);
+            attempts++;
+            delay(2000);
+        }
+    }
 }
 
 void print_result(const char* str, uint16_t value, int line) {
@@ -60,19 +78,47 @@ void parse_result(uint8_t* data) {
     }
 }
 
+void displayInit() {
+    // Displayinitialisierung
+    tft.begin();
+    tft.setRotation(3);
+    pinMode(LCD_BACKLIGHT, OUTPUT);
+    digitalWrite(LCD_BACKLIGHT, HIGH);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(&FreeMono9pt7b);
+}
+
+void test_wifi() {
+    int result = wifiClient.connect("192.168.0.6", 1883);
+    DEBUG_OUTPUT.print("TCP connect result: ");
+    DEBUG_OUTPUT.println(result); // 1 = success, 0 = fail
+}
+
 void setup() {
     DEBUG_OUTPUT.begin(115200);
-    init_mqtt_client();
+    delay(1000);
+    DEBUG_OUTPUT.println("Boot OK");
+    displayInit();
+    tft.drawString("Boot successful!", 10, 5);
+
     WiFi.begin(ssid, password);
-    DEBUG_OUTPUT.print("Trying to connect to: ");
-    DEBUG_OUTPUT.println(ssid);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         DEBUG_OUTPUT.print(".");
     }
+    DEBUG_OUTPUT.print("Connected to: ");
+    DEBUG_OUTPUT.println(ssid);
+    tft.drawString("Connected to", 10, 20);
+    tft.drawString(ssid, 10, 35);
+
+    delay(2000);
+    //init_mqtt_client();
+    test_wifi();
 
     unsigned int soc = lipo.soc();
-    delay(100);
+    
+    
     DEBUG_OUTPUT.println("Wio Terminal PM2.5 Sensor Starting...");
     
     // Sensorinitialisierung
@@ -82,14 +128,7 @@ void setup() {
     }
     DEBUG_OUTPUT.println("HM330X initialized successfully");
 
-    // Displayinitialisierung
-    tft.begin();
-    tft.setRotation(3);
-    pinMode(LCD_BACKLIGHT, OUTPUT);
-    digitalWrite(LCD_BACKLIGHT, HIGH);
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setFreeFont(&FreeMono9pt7b);
+    
 
     // Header
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
@@ -120,7 +159,9 @@ void loop() {
             // Parse and display the data
             parse_result(buf);
             DEBUG_OUTPUT.println("Display updated successfully");
-            client.publish("sensordata/particle", "TestPayload");
+            if(client.connected()) {
+                client.publish("sensordata/particle", "TestPayload");
+            }
         }
     }
     
