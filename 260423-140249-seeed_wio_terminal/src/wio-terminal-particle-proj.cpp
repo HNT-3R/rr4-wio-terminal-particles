@@ -1,14 +1,25 @@
+#include <cstdlib>
+#include <iostream>
+
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <SparkFunBQ27441.h>
 #include <Seeed_HM330X.h>
+#include <rpcWiFi.h>
+#include <PubSubClient.h>
 
 // Serial-Monitor für Debug
 #define DEBUG_OUTPUT Serial
 
+WiFiClient wifiClient;
+PubSubClient client;
 HM330X sensor;
 TFT_eSPI tft;
 uint8_t buf[30];
+
+const char* ssid     = WLANSSID;
+const char* password = WLANPW;
+const char* clientID = "john_sense";
 
 //PMXXX mit XXX = Größe in Mikrometer der Partikel
 const char* str[] = {"PM1.0 conc(CF=1,SPM): ",
@@ -18,6 +29,12 @@ const char* str[] = {"PM1.0 conc(CF=1,SPM): ",
                      "PM2.5 conc(AE): ",
                      "PM10 conc(AE): ",
                     };
+
+void init_mqtt_client() {
+    client.setClient(wifiClient);
+    client.setServer("185.45.204.21", 1883);
+    client.connect(clientID);
+}
 
 void print_result(const char* str, uint16_t value, int line) {
     if (NULL == str) {
@@ -44,9 +61,17 @@ void parse_result(uint8_t* data) {
 }
 
 void setup() {
-    unsigned int soc = lipo.soc();
-
     DEBUG_OUTPUT.begin(115200);
+    init_mqtt_client();
+    WiFi.begin(ssid, password);
+    DEBUG_OUTPUT.print("Trying to connect to: ");
+    DEBUG_OUTPUT.println(ssid);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        DEBUG_OUTPUT.print(".");
+    }
+
+    unsigned int soc = lipo.soc();
     delay(100);
     DEBUG_OUTPUT.println("Wio Terminal PM2.5 Sensor Starting...");
     
@@ -95,6 +120,7 @@ void loop() {
             // Parse and display the data
             parse_result(buf);
             DEBUG_OUTPUT.println("Display updated successfully");
+            client.publish("sensordata/particle", "TestPayload");
         }
     }
     
