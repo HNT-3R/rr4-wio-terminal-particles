@@ -25,7 +25,7 @@ uint8_t buf[30];
 const char* SSID     = WLANSSID;
 const char* PASS     = WLANPW;
 const char* MQTT_CLIENT_ID = "john_sense";
-const char MQTT_BROKER_ADRRESS[] = "192.168.0.3";
+const char MQTT_BROKER_ADRRESS[] = "10.184.196.127";
 const int MQTT_PORT = 1883;
 const char MQTT_USERNAME[] = "";                      
 const char MQTT_PASSWORD[] = "";  
@@ -84,11 +84,11 @@ char* parse_result_to_json(uint8_t* data) {
 
     JsonDocument doc;
     doc["source"] = "MY_HM330X";
-    doc["pm_spm_1.0"] = (uint16_t)data[2] << 8 | data[3];
-    doc["pm_spm_2.5"] = (uint16_t)data[4] << 8 | data[5];
+    doc["pm_spm_1_0"] = (uint16_t)data[2] << 8 | data[3];
+    doc["pm_spm_2_5"] = (uint16_t)data[4] << 8 | data[5];
     doc["pm_spm_10"] = (uint16_t)data[6] << 8 | data[7];
-    doc["pm_ae_1.0"] = (uint16_t)data[8] << 8 | data[9];
-    doc["pm_ae_2.5"] = (uint16_t)data[10] << 8 | data[11];
+    doc["pm_ae_1_0"] = (uint16_t)data[8] << 8 | data[9];
+    doc["pm_ae_2_5"] = (uint16_t)data[10] << 8 | data[11];
     doc["pm_ae_10"] = (uint16_t)data[12] << 8 | data[13];
 
     serializeJson(doc, output, sizeof(output));

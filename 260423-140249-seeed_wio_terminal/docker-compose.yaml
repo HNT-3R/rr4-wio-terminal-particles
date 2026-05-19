@@ -1,0 +1,38 @@
+version: "3.9"
+
+########################### NETWORKS
+networks:
+  default:
+    driver: bridge
+
+########################### SERVICES
+services:
+  # InfluxDB - Database for sensor data
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    networks:
+      - default
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - /opt/influxdb2/config:/etc/influxdb2
+      - /opt/influxdb2/db:/var/lib/influxdb2
+
+
+  nodered:
+    container_name: nodered
+    image: nodered/node-red
+    networks:
+      - default
+    ports:
+      - 1880:1880
+      - 1883:1883
+    depends_on:
+      - influxdb
+    volumes:
+      - /home/remilia/node-data:/data
+
