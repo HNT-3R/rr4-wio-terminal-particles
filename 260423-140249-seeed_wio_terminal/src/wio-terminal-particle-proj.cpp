@@ -9,6 +9,7 @@
 #include <Seeed_HM330X.h>
 #include <rpcWiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 using namespace std;
 
@@ -16,14 +17,24 @@ using namespace std;
 #define DEBUG_OUTPUT Serial
 
 WiFiClient wifiClient;
-PubSubClient client;
+PubSubClient client(wifiClient);
 HM330X sensor;
 TFT_eSPI tft;
 uint8_t buf[30];
 
-const char* ssid     = WLANSSID;
-const char* password = WLANPW;
-const char* clientID = "john_sense";
+const char* SSID     = WLANSSID;
+const char* PASS     = WLANPW;
+const char* MQTT_CLIENT_ID = "john_sense";
+const char MQTT_BROKER_ADRRESS[] = "192.168.0.3";
+const int MQTT_PORT = 1883;
+const char MQTT_USERNAME[] = "";                      
+const char MQTT_PASSWORD[] = "";  
+const char PUBLISH_TOPIC[] = "sensordata/particle"; 
+const char SUBSCRIBE_TOPIC[] = "sensordata/particle";
+
+const int PUBLISH_INTERVAL = 5000;  // 5 seconds
+
+#define MQTT_MAX_PACKET_SIZE 512
 
 //PMXXX mit XXX = Größe in Mikrometer der Partikel
 const char* str[] = {"PM1.0 conc(CF=1,SPM): ",
@@ -33,26 +44,6 @@ const char* str[] = {"PM1.0 conc(CF=1,SPM): ",
                      "PM2.5 conc(AE): ",
                      "PM10 conc(AE): ",
                     };
-
-void init_mqtt_client() {
-    wifiClient.setTimeout(5000);
-    client.setClient(wifiClient);
-    client.setServer("185.45.204.21", 1883);
-    client.setSocketTimeout(10);
-    int attempts = 0;
-    while(!client.connected()) {
-        DEBUG_OUTPUT.print("Attempting connection to MQTT Broker...");
-        tft.drawString("Attempting MQTT Broker connect...", 10, 50);
-        if(client.connect(clientID)) {
-            tft.drawString("Sucessfully connected to broker!", 10, 65);
-        } else {
-            DEBUG_OUTPUT.print("Attempts: ");
-            DEBUG_OUTPUT.println(attempts);
-            attempts++;
-            delay(2000);
-        }
-    }
-}
 
 void print_result(const char* str, uint16_t value, int line) {
     if (NULL == str) {
@@ -64,22 +55,49 @@ void print_result(const char* str, uint16_t value, int line) {
 }
 
 /*parse buf with 29 uint8_t-data*/
-void parse_result(uint8_t* data) {
+void parse_result_to_display(uint8_t* data) {
     uint16_t value = 0;
-    if (NULL == data) {
+    if (data == NULL) {
         return;
     }
     
     tft.fillRect(10, 60, 310, 180, TFT_BLACK);
     
     for (int i = 1; i <= 6; i++) { 
-        value = (uint16_t)data[i * 2] << 8 | data[i * 2 + 1];
+        /* 
+        Konversion in 16 Bit wie folgt:
+        Daten pro Datensatz sind 2 Byte. Erstes Byte wird um 8 Stellen links geshifted,
+        sodass dies dann mit dem zweiten Byte ORed werden kann um einen 16-Bit Wert zu kriegen.
+        */
+        value = (uint16_t)data[i * 2] << 8 | data[i * 2 + 1]; 
         print_result(str[i - 1], value, i - 1);
     }
 }
 
+/*parse buf with 29 uint8_t-data*/
+char* parse_result_to_json(uint8_t* data) {
+    static char output[256];
+
+    if (data == NULL) {
+        return output;
+    }
+
+    JsonDocument doc;
+    doc["source"] = "MY_HM330X";
+    doc["pm_spm_1.0"] = (uint16_t)data[2] << 8 | data[3];
+    doc["pm_spm_2.5"] = (uint16_t)data[4] << 8 | data[5];
+    doc["pm_spm_10"] = (uint16_t)data[6] << 8 | data[7];
+    doc["pm_ae_1.0"] = (uint16_t)data[8] << 8 | data[9];
+    doc["pm_ae_2.5"] = (uint16_t)data[10] << 8 | data[11];
+    doc["pm_ae_10"] = (uint16_t)data[12] << 8 | data[13];
+
+    serializeJson(doc, output, sizeof(output));
+    return output;
+}
+
 void displayInit() {
     // Displayinitialisierung
+    // Auflösung: 320 x 240
     tft.begin();
     tft.setRotation(3);
     pinMode(LCD_BACKLIGHT, OUTPUT);
@@ -89,35 +107,100 @@ void displayInit() {
     tft.setFreeFont(&FreeMono9pt7b);
 }
 
-void test_wifi() {
-    int result = wifiClient.connect("192.168.0.6", 1883);
-    DEBUG_OUTPUT.print("TCP connect result: ");
-    DEBUG_OUTPUT.println(result); // 1 = success, 0 = fail
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+
+  // Switch on the LED if an 1 was received as first character
+  if ((char)payload[0] == '1') {
+    //stuff
+  } else {
+    //more stuff
+  }
+
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    String clientId = "WIOClient-";
+    clientId += String(random(0xffff), HEX);
+
+    wifiClient.setTimeout(5000);
+    client.setSocketTimeout(5);
+    
+    wifiClient.stop();
+    delay(500);
+
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi lost, reconnecting...");
+        WiFi.disconnect();
+        delay(500);
+        WiFi.begin(SSID, PASS);
+        int attempts = 0;
+        while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+            delay(500);
+            Serial.print(".");
+            attempts++;
+        }
+        Serial.println();
+    }
+
+    // Attempt to connect
+    if (client.connect(clientId.c_str())) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      client.publish(PUBLISH_TOPIC, "hello world");
+      // ... and resubscribe
+      client.subscribe(SUBSCRIBE_TOPIC);
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+void connect_to_wifi() {
+    WiFi.begin(SSID, PASS);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        DEBUG_OUTPUT.print(".");
+    }
+    DEBUG_OUTPUT.print("Connected to: ");
+    DEBUG_OUTPUT.println(SSID);
+    tft.drawString("Connected to", 10, 20);
+    tft.drawString(SSID, 10, 35);
+    DEBUG_OUTPUT.println(WiFi.localIP());
 }
 
 void setup() {
     DEBUG_OUTPUT.begin(115200);
     delay(1000);
     DEBUG_OUTPUT.println("Boot OK");
+    DEBUG_OUTPUT.print("RTL8720 firmware version: ");
+    DEBUG_OUTPUT.println(rpc_system_version());
     displayInit();
     tft.drawString("Boot successful!", 10, 5);
 
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        DEBUG_OUTPUT.print(".");
-    }
-    DEBUG_OUTPUT.print("Connected to: ");
-    DEBUG_OUTPUT.println(ssid);
-    tft.drawString("Connected to", 10, 20);
-    tft.drawString(ssid, 10, 35);
-
+    connect_to_wifi();
     delay(2000);
-    //init_mqtt_client();
-    test_wifi();
 
-    unsigned int soc = lipo.soc();
-    
+    wifiClient.setTimeout(5000);
+    client.setSocketTimeout(5);
+    client.setServer(MQTT_BROKER_ADRRESS, MQTT_PORT);
+    client.setCallback(callback);
+
+    if (lipo.begin()) {
+        unsigned int soc = lipo.soc();
+    }
     
     DEBUG_OUTPUT.println("Wio Terminal PM2.5 Sensor Starting...");
     
@@ -128,9 +211,8 @@ void setup() {
     }
     DEBUG_OUTPUT.println("HM330X initialized successfully");
 
-    
-
     // Header
+    tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
     tft.drawString("Units: ug/m^3", 10, 5);
     tft.drawString("AE = Atmospheric environment", 10, 20);
@@ -138,11 +220,17 @@ void setup() {
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     
     DEBUG_OUTPUT.println("Setup complete - starting main loop");
+
 }
 
 void loop() {
     static unsigned long lastUpdate = 0;
     static int updateCount = 0;
+
+    if(!client.connected()) {
+        reconnect();
+    }
+    client.loop();
     
     // Update alle 1000ms
     if (millis() - lastUpdate >= 1000) {
@@ -157,10 +245,10 @@ void loop() {
             DEBUG_OUTPUT.println("HM330X read result failed!!");
         } else {
             // Parse and display the data
-            parse_result(buf);
+            parse_result_to_display(buf);
             DEBUG_OUTPUT.println("Display updated successfully");
             if(client.connected()) {
-                client.publish("sensordata/particle", "TestPayload");
+                client.publish(PUBLISH_TOPIC, parse_result_to_json(buf));
             }
         }
     }

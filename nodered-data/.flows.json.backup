@@ -2,16 +2,24 @@
     {
         "id": "f6f2187d.f17ca8",
         "type": "tab",
-        "label": "Flow 1",
+        "label": "RR4",
         "disabled": false,
         "info": ""
+    },
+    {
+        "id": "ee7f5b4f9d57c1c4",
+        "type": "tab",
+        "label": "WebServiceTest",
+        "disabled": true,
+        "info": "",
+        "env": []
     },
     {
         "id": "12a70121c8eae8c8",
         "type": "mqtt-broker",
         "name": "",
-        "broker": " 185.45.204.21",
-        "port": 1883,
+        "broker": "10.184.196.99",
+        "port": "1883",
         "clientid": "main-client",
         "autoConnect": true,
         "usetls": false,
@@ -59,8 +67,12 @@
         "x": 290,
         "y": 280,
         "wires": [
-            [],
-            []
+            [
+                "5de3b3791e834614"
+            ],
+            [
+                "0e3e67958f9b27d8"
+            ]
         ]
     },
     {
@@ -115,8 +127,8 @@
         "correl": "",
         "expiry": "",
         "broker": "12a70121c8eae8c8",
-        "x": 390,
-        "y": 480,
+        "x": 550,
+        "y": 440,
         "wires": []
     },
     {
@@ -140,12 +152,155 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 170,
-        "y": 480,
+        "x": 270,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5de3b3791e834614",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 480,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "0e3e67958f9b27d8",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 480,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "d8e5c6c652c65581",
+        "type": "http in",
+        "z": "ee7f5b4f9d57c1c4",
+        "name": "",
+        "url": "/hint/getsample",
+        "method": "get",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 310,
+        "y": 240,
         "wires": [
             [
-                "fdcd4d2dee8d27c1"
+                "6708db1c2ce7b68f"
             ]
         ]
+    },
+    {
+        "id": "6708db1c2ce7b68f",
+        "type": "change",
+        "z": "ee7f5b4f9d57c1c4",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "{\"puzzleID\":1,\"puzzleLevel\":3,\"category\":\"map\",\"text\":\"Du hast das Rätsel gelöst! Dein Hinweis:\",\"coordinates\":[10.763,51.825],\"radius\":100}",
+                "tot": "json"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 550,
+        "y": 240,
+        "wires": [
+            [
+                "dddec42d9c2c9220"
+            ]
+        ]
+    },
+    {
+        "id": "dddec42d9c2c9220",
+        "type": "http response",
+        "z": "ee7f5b4f9d57c1c4",
+        "name": "",
+        "statusCode": "200",
+        "headers": {},
+        "x": 740,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "3cad5ffb3a5702ef",
+        "type": "http in",
+        "z": "ee7f5b4f9d57c1c4",
+        "name": "",
+        "url": "/puzzle/getbycheckpointid/:checkpointid",
+        "method": "get",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 230,
+        "y": 300,
+        "wires": [
+            [
+                "e887ef99a6a1aa27"
+            ]
+        ]
+    },
+    {
+        "id": "e887ef99a6a1aa27",
+        "type": "change",
+        "z": "ee7f5b4f9d57c1c4",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "{\"puzzleID\":1,\"puzzleLevel\":1,\"question\":\"Wie viel Obamas?!\",\"choices\":[\"Einer\",\"Keiner\",\"Meiner\",\"1.5\"],\"correctResult\":1}",
+                "tot": "json"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 550,
+        "y": 300,
+        "wires": [
+            [
+                "b6728d09ae5335ed"
+            ]
+        ]
+    },
+    {
+        "id": "b6728d09ae5335ed",
+        "type": "http response",
+        "z": "ee7f5b4f9d57c1c4",
+        "name": "",
+        "statusCode": "200",
+        "headers": {},
+        "x": 740,
+        "y": 300,
+        "wires": []
     }
 ]
